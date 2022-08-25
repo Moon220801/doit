@@ -15,6 +15,7 @@ import (
 
 var Cuser *mongo.Collection
 var Ctodolist *mongo.Collection
+var Cdaily *mongo.Collection
 
 func init() {
 	LoadTheEnv()
@@ -33,6 +34,7 @@ func CreateDBInstance() {
 	dbName := os.Getenv("DB_NAME")
 	collUser := os.Getenv("DB_COLLECTION_USER")
 	collToDoList := os.Getenv("DB_COLLECTION_TODOLIST")
+	collDaily := os.Getenv("DB_COLLECTION_DAILY")
 	clientOptions := options.Client().ApplyURI(connectionString)
 	client, err := mongo.Connect(context.TODO(), clientOptions)
 
@@ -47,6 +49,7 @@ func CreateDBInstance() {
 	fmt.Println("Connected to MongoDB!")
 	Cuser = client.Database(dbName).Collection(collUser)
 	Ctodolist = client.Database(dbName).Collection(collToDoList)
+	Cdaily = client.Database(dbName).Collection(collDaily)
 
 	fmt.Println("Collection instance created!")
 }

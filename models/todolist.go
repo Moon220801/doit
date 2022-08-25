@@ -1,6 +1,7 @@
 package models
 
 import (
+	"doit/common"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -8,15 +9,18 @@ import (
 
 // User defines the user mongo object.
 type ToDoList struct {
-	ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	DoitId      primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	Title       string             `json:"title,omitempty"`
 	Content     string             `json:"content,omitempty"`
 	Type        string             `json:"type,omitempty"`
 	Remark      string             `json:"remark,omitempty"`
-	CreatedAt   time.Time          `json:"created_at,omitempty"`
-	UpdateAt    time.Time          `json:"update_at,omitempty"`
-	CompletedAt time.Time          `json:"completed_at,omitempty"`
-	StartdateAt time.Time          `json:"startdate_at,omitempty"`
-	EnddateAt   time.Time          `json:"enddate_at,omitempty"`
-	Status      bool               `json:"status,omitempty"`
+	CreatedAt   time.Time          `json:"createdAt,omitempty"`
+	UpdateAt    time.Time          `json:"updateAt,omitempty"`
+	CompletedAt time.Time          `json:"completedAt,omitempty"`
+	StartdateAt common.JsonTime    `json:"startdateAt,omitempty"`
+	EnddateAt   common.JsonTime    `json:"enddateAt,omitempty"`
+	Timeleft    string             `json:"timeleft,omitempty"`
+	Complete    bool               `json:"complete,omitempty"`
+	Status      string             `json:"status,omitempty"`
+	Useremail   string             `json:"userEmail,omitempty"`
 }

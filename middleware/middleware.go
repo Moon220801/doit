@@ -2,12 +2,11 @@ package middleware
 
 import (
 	"doit/db"
-	"doit/models"
 	"fmt"
 	"time"
 
 	"github.com/iris-contrib/middleware/jwt"
-	"github.com/kataras/iris"
+	"github.com/kataras/iris/v12"
 )
 
 var mySecret = []byte("secret")
@@ -21,7 +20,7 @@ var j = jwt.New(jwt.Config{
 	// There are plenty of options.
 	// The default jwt's behavior to extract a token value is by
 	// the `Authorization: Bearer $TOKEN` header.
-	Extractor: jwt.FromParameter("token"),
+	Extractor: jwt.FromAuthHeader,
 	// When set, the middleware verifies that tokens are
 	// signed with the specific signing algorithm
 	// If the signing method is not constant the `jwt.Config.ValidationKeyGetter` callback
@@ -32,52 +31,52 @@ var j = jwt.New(jwt.Config{
 })
 
 // generate token to use.
-func getTokenHandler(ctx iris.Context) {
+func GetTokenHandler(ctx iris.Context, email string) {
 	var C = db.NewClient()
-	users := models.Users{}
+
 	now := time.Now()
 	token := jwt.NewTokenWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":    users.Userid,
-		"name":  users.Name,
-		"email": users.Email,
-		"iat":   now.Unix(),
+		"email": email,
 		"exp":   now.Add(15 * time.Minute).Unix(),
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
 	tokenString, _ := token.SignedString(mySecret)
 
-	err := C.Set(tokenString, "", 15*time.Minute).Err() // => SET key value 0 數字代表過期秒數，在這裡0為永不過期
+	intcmd := C.Exists(email)
+	if intcmd != nil {
+		intcmd := C.Del(email)
+		fmt.Println(intcmd.Result())
+		err := C.Set(email, tokenString, 15*time.Minute).Err() //SET key value 0 數字代表過期秒數，在這裡0為永不過期
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err := C.Set(email, tokenString, 15*time.Minute).Err() //SET key value 0 數字代表過期秒數，在這裡0為永不過期
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	val, err := C.Get(email).Result() //GET key value
 	if err != nil {
 		panic(err)
 	}
-
-	val, err := C.Get(tokenString).Result() // => GET key
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(tokenString, val)
-
-	//ctx.HTML(`Token: ` + tokenString + `<br/><br/>
-	//<a href="/tasks?token=` + tokenString + `">/tasks?token=` + tokenString + `</a>`)
-	//fmt.Println(tokenString)
+	fmt.Println(val)
 
 }
 
-func myAuthenticatedHandler(ctx iris.Context) {
-	if err := j.CheckJWT(ctx); err != nil {
-		j.Config.ErrorHandler(ctx, err)
-		return
+func AuthToken(ctx iris.Context) string {
+	u := ctx.Values().Get("jwt").(*jwt.Token) //获取 token 信息
+	email, _ := u.Claims.(jwt.MapClaims)["email"].(string)
+	return email
+}
+
+func DeleteToken(ctx iris.Context, email string) {
+	var C = db.NewClient()
+
+	intcmd := C.Exists(email)
+	if intcmd != nil {
+		C.Del(email)
 	}
-
-	token := ctx.Values().Get("jwt").(*jwt.Token)
-
-	ctx.Writef("This is an authenticated request\n\n")
-	// ctx.Writef("Claim content:\n")
-
-	foobar := token.Claims.(jwt.MapClaims)
-	ctx.Writef("foo=%s\n", foobar["foo"])
-	// for key, value := range foobar {
-	// 	ctx.Writef("%s = %s", key, value)
-	// }
 }

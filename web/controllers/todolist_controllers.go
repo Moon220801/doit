@@ -3,9 +3,11 @@ package controllers
 import (
 	"context"
 	"doit/db"
+	"doit/middleware"
 	"doit/models"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/kataras/iris/v12"
@@ -16,99 +18,49 @@ import (
 var todolist []models.ToDoList
 
 func GetTasks(ctx iris.Context) {
-	results := []models.ToDoList{}
-	cur, err := db.Ctodolist.Find(context.Background(), bson.D{{}})
-	fmt.Println(*cur)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var elem models.ToDoList
+	email := middleware.AuthToken(ctx)
+	filter := bson.D{{"useremail", bson.D{{"$eq", email}}}}
+	fmt.Println(filter)
 
-	for cur.Next(context.Background()) {
-		e := cur.Decode(&elem)
+	var results []primitive.M
+
+	d, err := db.Ctodolist.Find(context.Background(), filter)
+
+	if err != nil {
+
+	}
+	for d.Next(context.Background()) {
+		var result bson.M
+		e := d.Decode(&result)
 		if e != nil {
 			log.Fatal(e)
 		}
 		// fmt.Println("cur..>", cur, "result", reflect.TypeOf(result), reflect.TypeOf(result["_id"]))
-		results = append(results, elem)
-
-	}
-	for i := range results {
-		fmt.Println(results[i].Title)
+		results = append(results, result)
 
 	}
 
-	if err := cur.Err(); err != nil {
+	if err := d.Err(); err != nil {
 		log.Fatal(err)
 	}
-	//ctx.JSON(results)
-
-	/*data := iris.Map{
-		"qq":      results,
-		"Title":   result["title"],
-		"Content": result["content"],
-	}*/
-	ctx.ViewData("Title", "hi")
-	ctx.ViewData("qq", results)
-	ctx.ViewData("author", "Iris expert")
-	ctx.ViewData("chapterCount", "40")
-
-	ctx.View("tasks")
-
-	/*ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
-	Title       string             `json:"title,omitempty"`
-	Content     string             `json:"content,omitempty"`
-	Type        string             `json:"type,omitempty"`
-	Remark      string             `json:"remark,omitempty"`
-	CreatedAt   time.Time          `json:"created_at,omitempty"`
-	UpdateAt    time.Time          `json:"update_at,omitempty"`
-	CompletedAt time.Time          `json:"completed_at,omitempty"`
-	StartdateAt time.Time          `json:"startdate_at,omitempty"`
-	EnddateAt   time.Time          `json:"enddate_at,omitempty"`
-	Status      bool               `json:"status,omitempty"`*/
+	ctx.JSON(results)
 
 }
 
 func CreateTasks(ctx iris.Context) {
-	var (
-		title   = ctx.FormValue("title")
-		content = ctx.FormValue("content")
-	)
-	var tasks models.ToDoList
-
-	//tasks := new(models.ToDoList)
-	//err := ctx.ReadJSON(tasks)
-
-	tasks.CreatedAt = time.Now()
-	tasks.UpdateAt = time.Now()
-
-	_, err := db.Ctodolist.InsertOne(context.Background(), bson.M{"title": title, "content": content})
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	//ctx.JSON(insertResult)
-	//GetTasks(ctx)
-	ctx.View("tasks")
-
-}
-
-func UpdoTasks(ctx iris.Context) {
+	email := middleware.AuthToken(ctx)
 	tasks := new(models.ToDoList)
 	err := ctx.ReadJSON(tasks)
-
-	id := ctx.Params().Get("id")
-	objectId, _ := primitive.ObjectIDFromHex(id)
-	filter := bson.M{"_id": objectId}
-	update := bson.M{"$set": tasks}
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
+	tasks.Useremail = email
+	tasks.CreatedAt = time.Now()
 	tasks.UpdateAt = time.Now()
+	tasks.Status = "0"
+	insertResult, err := db.Ctodolist.InsertOne(context.Background(), tasks)
+	t := time.Time(tasks.EnddateAt).Sub(tasks.CreatedAt)
+	it64 := int64(t)
+	tasks.Timeleft = strconv.FormatInt(it64, 10)
 
-	insertResult, err := db.Ctodolist.UpdateOne(context.Background(), filter, update)
+	fmt.Println(tasks.Timeleft)
 
 	if err != nil {
 		panic(err.Error())
@@ -118,9 +70,66 @@ func UpdoTasks(ctx iris.Context) {
 
 }
 
+func UpdoTasks(ctx iris.Context) {
+
+	tasks := new(models.ToDoList)
+	err := ctx.ReadJSON(tasks)
+
+	email := middleware.AuthToken(ctx)
+	id := ctx.Params().Get("id")
+	objectId, _ := primitive.ObjectIDFromHex(id)
+	filter := bson.M{"_id": objectId}
+	d := db.Ctodolist.FindOne(context.Background(), filter)
+	var result bson.M
+	e := d.Decode(&result)
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	if email == result["useremail"] {
+		id := ctx.Params().Get("id")
+		objectId, _ := primitive.ObjectIDFromHex(id)
+		filter := bson.M{"_id": objectId}
+		update := bson.M{"$set": tasks}
+
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		tasks.UpdateAt = time.Now()
+
+		insertResult, err := db.Ctodolist.UpdateOne(context.Background(), filter, update)
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		ctx.JSON(insertResult)
+
+	} else {
+		ctx.WriteString("不要亂偷人家任務拉！ಠ_ಠ\n")
+	}
+
+}
+
 func DeleteOneTasks(ctx iris.Context) {
-	method := ctx.FormValue("method")
-	if method == "delete" {
+	tasks := new(models.ToDoList)
+	err := ctx.ReadJSON(tasks)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	email := middleware.AuthToken(ctx)
+	id := ctx.Params().Get("id")
+	objectId, _ := primitive.ObjectIDFromHex(id)
+	filter := bson.M{"_id": objectId}
+	d := db.Ctodolist.FindOne(context.Background(), filter)
+	var result bson.M
+	e := d.Decode(&result)
+	if e != nil {
+		log.Fatal(e)
+	}
+	if email == result["useremail"] {
 		id := ctx.Params().Get("id")
 		objectId, _ := primitive.ObjectIDFromHex(id)
 
@@ -130,14 +139,19 @@ func DeleteOneTasks(ctx iris.Context) {
 			fmt.Println(err.Error())
 		}
 
+	} else {
+		ctx.WriteString("不要亂刪人家任務拉！ಠ_ಠ\n")
 	}
-	GetTasks(ctx)
 
 }
 
 func DeleteAllTasks(ctx iris.Context) {
 
-	d, err := db.Ctodolist.DeleteMany(context.Background(), bson.D{{}})
+	email := middleware.AuthToken(ctx)
+	filter := bson.D{{"useremail", bson.D{{"$eq", email}}}}
+	fmt.Println(filter)
+
+	d, err := db.Ctodolist.DeleteMany(context.Background(), filter)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
@@ -150,18 +164,110 @@ func DeleteAllTasks(ctx iris.Context) {
 func SearchTasks(ctx iris.Context) {
 	id := ctx.Params().Get("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
+	email := middleware.AuthToken(ctx)
 
 	filter := bson.M{"_id": objectId}
 	d := db.Ctodolist.FindOne(context.Background(), filter)
+	var result bson.M
+	e := d.Decode(&result)
+
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	if email == result["email"] {
+		filter := bson.M{"_id": objectId}
+		d := db.Ctodolist.FindOne(context.Background(), filter)
+
+		var results []primitive.M
+		var result bson.M
+		e := d.Decode(&result)
+		if e != nil {
+			log.Fatal(e)
+		}
+		results = append(results, result)
+
+		ctx.JSON(results)
+	}
+
+}
+
+func SearchTypeTasks(ctx iris.Context) {
+	taskstype := ctx.Params().Get("type")
+	email := middleware.AuthToken(ctx)
+
+	d, _ := db.Ctodolist.Find(context.Background(), bson.M{"$and": []bson.M{{"type": taskstype}, {"useremail": email}}})
+	fmt.Println(d)
 
 	var results []primitive.M
+
+	for d.Next(context.Background()) {
+		var result bson.M
+		e := d.Decode(&result)
+		if e != nil {
+			log.Fatal(e)
+		}
+		// fmt.Println("cur..>", cur, "result", reflect.TypeOf(result), reflect.TypeOf(result["_id"]))
+		results = append(results, result)
+
+	}
+
+	ctx.JSON(results)
+
+}
+
+func CompleteTask(ctx iris.Context) {
+	tasks := new(models.ToDoList)
+	err := ctx.ReadJSON(tasks)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	email := middleware.AuthToken(ctx)
+	id := ctx.Params().Get("id")
+	objectId, _ := primitive.ObjectIDFromHex(id)
+	filter := bson.M{"_id": objectId}
+	d := db.Ctodolist.FindOne(context.Background(), filter)
 	var result bson.M
 	e := d.Decode(&result)
 	if e != nil {
 		log.Fatal(e)
 	}
-	results = append(results, result)
 
-	ctx.JSON(results)
+	if email == result["email"] {
+
+		id := ctx.Params().Get("id")
+		objectId, _ := primitive.ObjectIDFromHex(id)
+		filter := bson.M{"_id": objectId}
+
+		tasks.CompletedAt = time.Now()
+		update := bson.M{"$set": bson.M{"complete": true, "completedAt": tasks.CompletedAt, "state": "3"}}
+		result, err := db.Ctodolist.UpdateOne(context.Background(), filter, update)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx.JSON(result)
+		ctx.WriteString("任務完成！")
+
+	} else {
+		ctx.WriteString("你怎麼知道人家的任務(´･ᆺ･`)\n")
+
+	}
+
+}
+
+func UpdoTasksDate(ctx iris.Context) {
+	tasks := new(models.ToDoList)
+	err := ctx.ReadJSON(tasks)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	email := middleware.AuthToken(ctx)
+	filter := bson.D{{"useremail", bson.D{{"$eq", email}}}}
+	fmt.Println(filter)
+	//result, err := db.Ctodolist.UpdateMany(context.Background(), filter, bson.D{{"$set", bson.D{{"size.uom", "cm"}, {"status", "P"}}}})
 
 }
