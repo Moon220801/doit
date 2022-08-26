@@ -32,11 +32,12 @@ func main() {
 		app.Post("/logout", j.Serve, controllers.Logout)
 
 		app.Get("/tasks", j.Serve, controllers.GetTasks)
-		app.Get("/tasks/{id}", j.Serve, controllers.SearchTasks)
+		app.Get("/tasks/search/{id}", j.Serve, controllers.SearchTasks)
 		app.Get("/tasks/{type}", j.Serve, controllers.SearchTypeTasks)
 
 		app.Post("/tasks/create", j.Serve, controllers.CreateTasks)
 		app.Post("/tasks/{id}", j.Serve, controllers.UpdoTasks)
+		app.Post("/tasks/updodate/{id}", j.Serve, controllers.UpdoTasksDate)
 		app.Post("/tasks/complete/{id}", j.Serve, controllers.CompleteTask)
 
 		app.Delete("/tasks/{id}", j.Serve, controllers.DeleteOneTasks)
